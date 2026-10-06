@@ -1,0 +1,35 @@
+cmake_minimum_required(VERSION 3.16)
+project(fmcw_radar VERSION 1.0 LANGUAGES C CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+option(RADAR_BUILD_UI "Build the raylib desktop demo" ON)
+
+add_library(radar_core src/config.cpp src/simulation.cpp src/fft.cpp src/range_fft.cpp)
+target_include_directories(radar_core PUBLIC src)
+target_compile_options(radar_core PRIVATE -Wall -Wextra -Wpedantic)
+add_executable(radar_headless src/headless.cpp)
+target_link_libraries(radar_headless PRIVATE radar_core)
+
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(radar_tests tests/tests.cpp)
+  target_link_libraries(radar_tests PRIVATE radar_core)
+  add_test(NAME radar_tests COMMAND radar_tests)
+endif()
+
+if(RADAR_BUILD_UI)
+  include(FetchContent)
+  set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+  set(BUILD_GAMES OFF CACHE BOOL "" FORCE)
+  set(GLFW_BUILD_WAYLAND OFF CACHE BOOL "" FORCE)
+  set(GLFW_BUILD_X11 ON CACHE BOOL "" FORCE)
+  FetchContent_Declare(raylib
+    GIT_REPOSITORY https://github.com/raysan5/raylib.git
+    GIT_TAG 5.5
+    GIT_SHALLOW TRUE)
+  FetchContent_MakeAvailable(raylib)
+  add_executable(radar_demo src/main.cpp src/plots.cpp)
+  target_link_libraries(radar_demo PRIVATE radar_core raylib)
+  target_compile_options(radar_demo PRIVATE -Wall -Wextra -Wpedantic)
+endif()
