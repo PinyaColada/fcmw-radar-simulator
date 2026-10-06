@@ -1,6 +1,7 @@
 #include "simulation.h"
 #include "range_fft.h"
 #include "fft.h"
+#include "doppler_fft.h"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -30,6 +31,18 @@ int main() {
             require(std::abs(std::abs(*peak) - 1) < 1e-5, "coherent FFT gain");
         }
         std::cout << "PASS: FFT impulse, TX envelope, range bin and Hann gain\n";
+        for (int velocity_bin : {-12, 0, 9}) {
+            const auto beat = sim.beat(cfg, {{40 * cfg.range_resolution(), velocity_bin * cfg.velocity_resolution(), 1}});
+            const auto map = radar::doppler_fft(cfg, radar::range_fft(cfg, beat));
+            int best_d = 0, best_r = 0;
+            for (int d = 0; d < cfg.chirps; ++d)
+                for (int r = 0; r < cfg.range_bins(); ++r)
+                    if (map.power[d][r] > map.power[best_d][best_r]) { best_d = d; best_r = r; }
+            require(best_d == cfg.chirps / 2 + velocity_bin, "signed Doppler bin");
+            require(best_r == 40, "range bin with fast-time Doppler");
+            require(std::abs(radar::corrected_range(cfg, best_r, best_d) - 40 * cfg.range_resolution()) < cfg.range_resolution() / 2, "range Doppler correction");
+        }
+        std::cout << "PASS: signed Doppler peaks and range coupling\n";
     } catch (const std::exception& e) {
         std::cerr << "FAIL: " << e.what() << '\n';
         return 1;

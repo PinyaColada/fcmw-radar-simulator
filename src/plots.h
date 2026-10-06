@@ -1,5 +1,6 @@
 #pragma once
 #include "raylib.h"
+#include "doppler_fft.h"
 #include <string>
 #include <vector>
 namespace ui {
@@ -14,4 +15,6 @@ void line(Rectangle area, const std::vector<double>& values, double low, double 
 void axes(Rectangle area, double xmax, const char* unit, double ymin, double ymax);
 bool slider(Rectangle area, const char* title, double& value, double low, double high, const char* format);
 bool button(Rectangle area, const char* title);
+Color heat_color(double db);
+void heatmap(Rectangle area, const radar::Config& cfg, const radar::RangeDoppler& map);
 }

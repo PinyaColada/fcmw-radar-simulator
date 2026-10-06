@@ -1,6 +1,7 @@
 #include "plots.h"
 #include <algorithm>
 #include <cstdio>
+#include <cmath>
 
 namespace ui {
 Rectangle chart(Rectangle outer, const std::string& title, const std::string& subtitle) {
@@ -58,5 +59,24 @@ bool button(Rectangle a, const char* title) {
     DrawRectangleRounded(a, 0.15f, 5, hover ? Color{50, 76, 94, 255} : Color{32, 51, 68, 255});
     DrawText(title, static_cast<int>(a.x + 12), static_cast<int>(a.y + 10), 16, ink);
     return hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+}
+Color heat_color(double db) {
+    const double t = std::clamp((db + 70) / 70, 0.0, 1.0);
+    const Color stops[] = {{13, 22, 43, 255}, {32, 63, 127, 255}, {19, 156, 173, 255}, {247, 215, 96, 255}};
+    const int k = std::min(2, static_cast<int>(t * 3));
+    const double f = t * 3 - k;
+    return {static_cast<unsigned char>(stops[k].r * (1 - f) + stops[k + 1].r * f),
+            static_cast<unsigned char>(stops[k].g * (1 - f) + stops[k + 1].g * f),
+            static_cast<unsigned char>(stops[k].b * (1 - f) + stops[k + 1].b * f), 255};
+}
+void heatmap(Rectangle a, const radar::Config& cfg, const radar::RangeDoppler& map) {
+    for (int d = 0; d < cfg.chirps; ++d)
+        for (int r = 0; r < cfg.range_bins(); ++r) {
+            const double db = 10 * std::log10(std::max(1e-12, map.power[d][r]));
+            DrawRectangleRec({a.x + a.width * r / cfg.range_bins(),
+                a.y + a.height * (cfg.chirps - 1 - d) / cfg.chirps,
+                a.width / cfg.range_bins() + 0.5f, a.height / cfg.chirps + 0.5f}, heat_color(db));
+        }
+    axes(a, cfg.max_range(), "range / m", -cfg.max_velocity(), cfg.max_velocity());
 }
 }
