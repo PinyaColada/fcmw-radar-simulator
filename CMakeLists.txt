@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 option(RADAR_BUILD_UI "Build the raylib desktop demo" ON)
 
-add_library(radar_core src/config.cpp src/simulation.cpp src/fft.cpp src/range_fft.cpp src/doppler_fft.cpp)
+add_library(radar_core src/config.cpp src/simulation.cpp src/fft.cpp src/range_fft.cpp src/doppler_fft.cpp src/cfar.cpp)
 target_include_directories(radar_core PUBLIC src)
 target_compile_options(radar_core PRIVATE -Wall -Wextra -Wpedantic)
 add_executable(radar_headless src/headless.cpp)

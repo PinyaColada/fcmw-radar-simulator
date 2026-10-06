@@ -2,6 +2,7 @@
 #include "range_fft.h"
 #include "fft.h"
 #include "doppler_fft.h"
+#include "cfar.h"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -43,6 +44,27 @@ int main() {
             require(std::abs(radar::corrected_range(cfg, best_r, best_d) - 40 * cfg.range_resolution()) < cfg.range_resolution() / 2, "range Doppler correction");
         }
         std::cout << "PASS: signed Doppler peaks and range coupling\n";
+        radar::CfarConfig cp;
+        radar::RangeDoppler flat{std::vector<std::vector<double>>(cfg.chirps, std::vector<double>(cfg.range_bins(), 1))};
+        require(radar::cfar(cfg, flat, cp).empty(), "flat noise must not detect");
+        flat.power[0][40] = 20;
+        flat.power[cfg.chirps - 1][40] = 15;
+        auto detections = radar::cfar(cfg, flat, cp);
+        require(detections.size() == 1 && detections[0].doppler_bin == 0, "Doppler wrap and local maximum");
+        require(std::abs(detections[0].noise_power - 1) < 1e-12, "guard excludes neighbouring peak");
+        cp.threshold_factor = 21;
+        require(radar::cfar(cfg, flat, cp).empty(), "threshold factor controls detections");
+        cp.threshold_factor = 12;
+        flat.power[0][40] = flat.power[cfg.chirps - 1][40] = 1;
+        flat.power[10][0] = 100;
+        require(radar::cfar(cfg, flat, cp).empty(), "range boundary policy");
+        const auto single = radar::doppler_fft(cfg, radar::range_fft(cfg,
+            sim.beat(cfg, {{32 * cfg.range_resolution(), -4 * cfg.velocity_resolution(), 1}})));
+        detections = radar::cfar(cfg, single, cp);
+        require(std::any_of(detections.begin(), detections.end(), [&](const auto& d) {
+            return d.range_bin == 32 && d.doppler_bin == cfg.chirps / 2 - 4;
+        }), "end-to-end single target CFAR");
+        std::cout << "PASS: CA-CFAR threshold, guards, boundaries, wrap and target detection\n";
     } catch (const std::exception& e) {
         std::cerr << "FAIL: " << e.what() << '\n';
         return 1;
