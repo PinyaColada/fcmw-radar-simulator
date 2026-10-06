@@ -3,6 +3,7 @@
 #include "fft.h"
 #include "doppler_fft.h"
 #include "cfar.h"
+#include "tracker.h"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -65,6 +66,41 @@ int main() {
             return d.range_bin == 32 && d.doppler_bin == cfg.chirps / 2 - 4;
         }), "end-to-end single target CFAR");
         std::cout << "PASS: CA-CFAR threshold, guards, boundaries, wrap and target detection\n";
+        radar::Tracker tracker;
+        std::mt19937 rng(11);
+        std::normal_distribution<double> nr(0, 0.3), nv(0, 0.2);
+        double raw_error = 0, filtered_error = 0;
+        for (int frame = 0; frame < 120; ++frame) {
+            const double truth = 20 + 2 * frame * 0.05;
+            const double measured = truth + nr(rng);
+            tracker.update({{0, 0, measured, 2 + nv(rng), 1, 0.01}}, 0.05, 0.09, 0.04);
+            require(tracker.tracks().size() == 1, "stable single track association");
+            const auto& t = tracker.tracks()[0];
+            const auto& p = t.covariance;
+            require(p[0][0] > 0 && p[1][1] > 0 && p[0][0] * p[1][1] - p[0][1] * p[1][0] > 0, "positive covariance");
+            require(std::abs(p[0][1] - p[1][0]) < 1e-12, "symmetric covariance");
+            if (frame > 10) {
+                raw_error += std::pow(measured - truth, 2);
+                filtered_error += std::pow(t.range_m - truth, 2);
+            }
+        }
+        require(filtered_error < raw_error * 0.4, "Kalman reduces measurement error");
+        require(tracker.tracks()[0].confirmed(), "track confirmation");
+        const double before = tracker.tracks()[0].range_m;
+        tracker.update({}, 0.05, 0.09, 0.04);
+        require(tracker.tracks()[0].range_m > before && tracker.tracks()[0].misses == 1, "coast missed detection");
+        for (int i = 0; i < 5; ++i) tracker.update({}, 0.05, 0.09, 0.04);
+        require(tracker.tracks().empty(), "delete stale tracks");
+        tracker.reset();
+        for (int f = 0; f < 40; ++f) {
+            // Two targets cross in range; Doppler separates their association.
+            std::vector<radar::Detection> ds{{0, 0, 20 + 0.1 * f, 2, 1, 0}, {0, 0, 24 - 0.1 * f, -2, 1, 0}};
+            if (f % 2) std::reverse(ds.begin(), ds.end());
+            tracker.update(ds, 0.05, 0.09, 0.04);
+            require(tracker.tracks().size() == 2, "one-to-one association");
+            require(tracker.tracks()[0].id == 1 && tracker.tracks()[0].velocity_mps > 0, "identity through crossing");
+        }
+        std::cout << "PASS: Kalman error reduction, covariance, coasting, deletion and crossing association\n";
     } catch (const std::exception& e) {
         std::cerr << "FAIL: " << e.what() << '\n';
         return 1;
