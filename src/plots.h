@@ -12,7 +12,7 @@ constexpr Color cyan{62, 211, 216, 255};
 constexpr Color gold{255, 197, 93, 255};
 Rectangle chart(Rectangle outer, const std::string& title, const std::string& subtitle);
 void line(Rectangle area, const std::vector<double>& values, double low, double high, Color color);
-void axes(Rectangle area, double xmax, const char* unit, double ymin, double ymax);
+void axes(Rectangle area, double xmax, const char* unit, double ymin, double ymax, double xmin = 0);
 bool slider(Rectangle area, const char* title, double& value, double low, double high, const char* format);
 bool button(Rectangle area, const char* title);
 Color heat_color(double db);

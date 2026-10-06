@@ -6,7 +6,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(RADAR_BUILD_UI "Build the raylib desktop demo" ON)
 
 add_library(radar_core src/config.cpp src/simulation.cpp src/fft.cpp src/range_fft.cpp
-  src/doppler_fft.cpp src/cfar.cpp src/tracker.cpp src/demo.cpp)
+  src/doppler_fft.cpp src/cfar.cpp src/tracker.cpp src/demo.cpp src/options.cpp)
 target_include_directories(radar_core PUBLIC src)
 target_compile_options(radar_core PRIVATE -Wall -Wextra -Wpedantic)
 add_executable(radar_headless src/headless.cpp)
@@ -17,6 +17,8 @@ if(BUILD_TESTING)
   add_executable(radar_tests tests/tests.cpp)
   target_link_libraries(radar_tests PRIVATE radar_core)
   add_test(NAME radar_tests COMMAND radar_tests)
+  add_test(NAME headless_smoke COMMAND radar_headless --frames 8
+    --output "${CMAKE_CURRENT_BINARY_DIR}/smoke.svg")
 endif()
 
 if(RADAR_BUILD_UI)

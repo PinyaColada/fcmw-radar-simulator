@@ -27,10 +27,10 @@ void line(Rectangle a, const std::vector<double>& values, double low, double hig
         DrawLineEx(point(i - 1), point(i), 1.5f, color);
     }
 }
-void axes(Rectangle a, double xmax, const char* unit, double ymin, double ymax) {
+void axes(Rectangle a, double xmax, const char* unit, double ymin, double ymax, double xmin) {
     char text[80];
     for (int i = 0; i <= 4; ++i) {
-        std::snprintf(text, sizeof(text), "%.1f", xmax * i / 4);
+        std::snprintf(text, sizeof(text), "%.1f", xmin + (xmax - xmin) * i / 4);
         DrawText(text, static_cast<int>(a.x + a.width * i / 4 - 10), static_cast<int>(a.y + a.height + 9), 13, muted);
     }
     std::snprintf(text, sizeof(text), "%.1f", ymax);
@@ -49,7 +49,7 @@ bool slider(Rectangle a, const char* title, double& value, double low, double hi
     if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), {a.x - 8, a.y + 20, a.width + 16, 26}))
         value = low + std::clamp((GetMouseX() - a.x) / a.width, 0.0f, 1.0f) * (high - low);
     DrawRectangleRec(track, {49, 67, 86, 255});
-    const float x = a.x + a.width * static_cast<float>((value - low) / (high - low));
+    const float x = a.x + a.width * static_cast<float>(std::clamp((value - low) / (high - low), 0.0, 1.0));
     DrawRectangleRec({a.x, track.y, x - a.x, track.height}, cyan);
     DrawCircleV({x, track.y + 2}, 7, cyan);
     return previous != value;
@@ -77,6 +77,9 @@ void heatmap(Rectangle a, const radar::Config& cfg, const radar::RangeDoppler& m
                 a.y + a.height * (cfg.chirps - 1 - d) / cfg.chirps,
                 a.width / cfg.range_bins() + 0.5f, a.height / cfg.chirps + 0.5f}, heat_color(db));
         }
-    axes(a, cfg.max_range(), "range / m", -cfg.max_velocity(), cfg.max_velocity());
+    // Raster edges sit half a bin outside the FFT bin centres.
+    axes(a, cfg.max_range() - cfg.range_resolution() / 2, "range / m",
+        -cfg.max_velocity() - cfg.velocity_resolution() / 2,
+        cfg.max_velocity() - cfg.velocity_resolution() / 2, -cfg.range_resolution() / 2);
 }
 }

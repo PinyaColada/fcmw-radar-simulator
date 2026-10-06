@@ -13,6 +13,7 @@ Cube range_fft(const Config& cfg, const Cube& beat) {
             throw std::invalid_argument("wrong sample count");
         double gain = 0;
         for (int n = 0; n < cfg.samples(); ++n) {
+            // HLS: quantize Hann coefficients and keep product guard bits.
             const double w = cfg.window ? hann(n, cfg.samples()) : 1.0;
             row[n] *= w;
             gain += w;

@@ -1,9 +1,11 @@
 #include "demo.h"
+#include "options.h"
 #include "plots.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <iostream>
+#include <stdexcept>
 
 namespace {
 void top_down(Rectangle a, const radar::Config& cfg, const radar::Demo& demo) {
@@ -36,19 +38,24 @@ void top_down(Rectangle a, const radar::Config& cfg, const radar::Demo& demo) {
 }
 }
 
-int main() {
+int main(int argc, char** argv) {
     try {
-        radar::Config cfg;
-        radar::CfarConfig cfar_cfg;
-        int count = 3;
-        radar::Demo demo(cfg, radar::default_targets(cfg, count));
+        auto options = radar::parse_options(argc, argv);
+        if (options.help) { std::cout << radar::usage(); return 0; }
+        auto& cfg = options.radar;
+        auto& cfar_cfg = options.cfar;
+        int count = options.targets;
+        auto initial_targets = options.scene();
+        radar::Demo demo(cfg, initial_targets, options.seed);
         demo.step(cfg, cfar_cfg);
         SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
         InitWindow(1440, 960, "FMCW radar | signal to track");
+        if (!IsWindowReady()) throw std::runtime_error("could not create graphics window");
         SetWindowMinSize(1200, 850);
         SetTargetFPS(60);
         bool paused = false;
         double accumulator = 0;
+        int processed = 1;
         while (!WindowShouldClose()) {
             if (IsKeyPressed(KEY_SPACE)) paused = !paused;
             bool reset = IsKeyPressed(KEY_R);
@@ -68,7 +75,7 @@ int main() {
             double target_count = count;
             if (ui::slider({32, 220, 208, 50}, "Targets", target_count, 1, 3, "%.0f")) {
                 const int selected = static_cast<int>(std::round(target_count));
-                if (selected != count) { count = selected; reset = true; }
+                if (selected != count) { count = selected; initial_targets = radar::default_targets(cfg, count); reset = true; }
             }
             ui::slider({32, 286, 208, 50}, "CFAR threshold", cfar_cfg.threshold_factor, 2, 40, "%.1fx");
             if (ui::button({32, 353, 208, 39}, cfg.window ? "Hann window: ON" : "Hann window: OFF")) cfg.window = !cfg.window;
@@ -82,9 +89,9 @@ int main() {
             DrawText("[] Kalman estimate", 32, 722, 16, GREEN);
             DrawText("Grey = prediction only", 32, 750, 15, ui::muted);
 
-            if (reset) { demo = radar::Demo(cfg, radar::default_targets(cfg, count)); demo.step(cfg, cfar_cfg); accumulator = 0; }
+            if (reset) { demo = radar::Demo(cfg, initial_targets, options.seed); demo.step(cfg, cfar_cfg); accumulator = 0; ++processed; }
             if (!paused) accumulator += GetFrameTime();
-            if (accumulator >= cfg.frame_s) { demo.step(cfg, cfar_cfg); accumulator = 0; }
+            if (accumulator >= cfg.frame_s) { demo.step(cfg, cfar_cfg); accumulator -= cfg.frame_s; ++processed; }
             const auto& frame = demo.frame();
             std::vector<double> raw_i, raw_q, spectrum;
             double raw_max = 1;
@@ -108,7 +115,9 @@ int main() {
             std::snprintf(status, sizeof(status), "CFAR peaks: %zu  |  confirmed tracks: %d  |  heatmap: -70 to 0 dB (fixed)  |  %d FPS", frame.detections.size(), confirmed, GetFPS());
             DrawText(status, static_cast<int>(x), static_cast<int>(h - 25), 14, ui::muted);
             EndDrawing();
+            if (options.frames > 0 && processed >= options.frames) break;
         }
+        if (!options.screenshot.empty()) TakeScreenshot(options.screenshot.c_str());
         CloseWindow();
     } catch (const std::exception& e) { std::cerr << "radar_demo: " << e.what() << '\n'; return 1; }
 }

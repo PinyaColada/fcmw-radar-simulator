@@ -4,6 +4,7 @@
 #include "doppler_fft.h"
 #include "cfar.h"
 #include "tracker.h"
+#include "options.h"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -101,6 +102,60 @@ int main() {
             require(tracker.tracks()[0].id == 1 && tracker.tracks()[0].velocity_mps > 0, "identity through crossing");
         }
         std::cout << "PASS: Kalman error reduction, covariance, coasting, deletion and crossing association\n";
+        // Against a direct DFT, including phases: catches FFT permutation/sign bugs.
+        std::vector<radar::Complex> input(16);
+        for (std::size_t n = 0; n < input.size(); ++n) input[n] = {nr(rng), nv(rng)};
+        auto transformed = input;
+        radar::fft(transformed);
+        for (std::size_t k = 0; k < input.size(); ++k) {
+            radar::Complex expected{};
+            for (std::size_t n = 0; n < input.size(); ++n)
+                expected += input[n] * std::polar(1.0, -2 * radar::pi * k * n / input.size());
+            require(std::abs(expected - transformed[k]) < 1e-11, "FFT agrees with direct DFT");
+        }
+        cfg.snr_db = 10;
+        radar::Simulator noise_sim(123);
+        const auto noise_only = noise_sim.beat(cfg, {});
+        double noise_power = 0;
+        radar::Complex mean{};
+        for (const auto& row : noise_only) for (auto value : row) { noise_power += std::norm(value); mean += value; }
+        noise_power /= cfg.samples() * cfg.chirps;
+        mean /= cfg.samples() * cfg.chirps;
+        require(std::abs(noise_power - 0.1) < 0.004 && std::abs(mean) < 0.01, "complex Gaussian SNR definition");
+        cfg.snr_db = 5;
+        radar::CfarConfig multi_cfar;
+        radar::Demo demo(cfg, radar::default_targets(cfg, 3), 42);
+        int good_frames = 0;
+        for (int f = 0; f < 200; ++f) {
+            demo.step(cfg, multi_cfar);
+            if (f < 10) continue;
+            bool all_found = true;
+            for (const auto& truth : demo.frame().truth) {
+                const auto found = std::find_if(demo.tracks().begin(), demo.tracks().end(), [&](const auto& t) {
+                    return t.confirmed() && std::abs(t.range_m - truth.range_m) < cfg.range_resolution() &&
+                        std::abs(t.velocity_mps - truth.velocity_mps) < cfg.velocity_resolution();
+                });
+                if (found == demo.tracks().end()) all_found = false;
+            }
+            if (all_found) ++good_frames;
+        }
+        require(good_frames >= 185, "three-target end-to-end tracking coverage");
+        require(demo.tracks().size() == 3, "no spurious default-scenario tracks");
+        // Change radar timing and FFT sizes, not just default dimensions.
+        cfg.bandwidth_hz = 100e6; cfg.chirp_s = 100e-6; cfg.sample_rate_hz = 5.12e6; cfg.chirps = 32;
+        cfg.snr_db = 100;
+        const auto changed = radar::cfar(cfg, radar::doppler_fft(cfg, radar::range_fft(cfg,
+            sim.beat(cfg, {{60 * cfg.range_resolution(), 3 * cfg.velocity_resolution(), 1}}))), multi_cfar);
+        require(std::any_of(changed.begin(), changed.end(), [&](const auto& d) {
+            return d.range_bin == 60 && d.doppler_bin == cfg.chirps / 2 + 3;
+        }), "configurable timing and FFT sizes");
+        int rejected = 0;
+        try { auto bad = cfg; bad.chirps = 30; bad.validate(); } catch (const std::invalid_argument&) { ++rejected; }
+        try { auto bad = cfg; bad.sample_rate_hz = 5.123456e6; bad.validate(); } catch (const std::invalid_argument&) { ++rejected; }
+        try { auto bad = multi_cfar; bad.guard_doppler = 999; bad.validate(128, 64); } catch (const std::invalid_argument&) { ++rejected; }
+        try { std::vector<radar::Complex> bad(3); radar::fft(bad); } catch (const std::invalid_argument&) { ++rejected; }
+        require(rejected == 4, "invalid inputs rejected");
+        std::cout << "PASS: DFT reference, Gaussian noise power, 200-frame three-target chain, alternate timing and invalid inputs\n";
     } catch (const std::exception& e) {
         std::cerr << "FAIL: " << e.what() << '\n';
         return 1;
