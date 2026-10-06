@@ -67,8 +67,6 @@ int main(int argc, char** argv) {
             ClearBackground(ui::background);
             DrawText("FMCW / SIGNAL TO TRACK", 24, 20, 28, ui::ink);
             char status[180];
-            std::snprintf(status, sizeof(status), "77 GHz  |  %d samples x %d chirps  |  t = %.2f s  |  %s", cfg.samples(), cfg.chirps, demo.frame().time_s, paused ? "PAUSED" : "LIVE");
-            DrawText(status, 25, 56, 16, ui::muted);
             DrawRectangleRounded({16, 94, side - 16, h - 114}, 0.04f, 6, ui::panel);
             DrawText("LIVE CONTROLS", 32, 112, 18, ui::ink);
             ui::slider({32, 154, 208, 50}, "SNR / unit echo", cfg.snr_db, -35, 40, "%.1f dB");
@@ -90,9 +88,14 @@ int main(int argc, char** argv) {
             DrawText("Grey = prediction only", 32, 750, 15, ui::muted);
 
             if (reset) { demo = radar::Demo(cfg, initial_targets, options.seed); demo.step(cfg, cfar_cfg); accumulator = 0; ++processed; }
-            if (!paused) accumulator += GetFrameTime();
-            if (accumulator >= cfg.frame_s) { demo.step(cfg, cfar_cfg); accumulator -= cfg.frame_s; ++processed; }
+            if (!paused) {
+                // Bound backlog after a slow draw; each radar step still uses frame_s.
+                accumulator = std::min(accumulator + GetFrameTime(), 2 * cfg.frame_s);
+                if (accumulator >= cfg.frame_s) { demo.step(cfg, cfar_cfg); accumulator -= cfg.frame_s; ++processed; }
+            }
             const auto& frame = demo.frame();
+            std::snprintf(status, sizeof(status), "77 GHz  |  %d samples x %d chirps  |  t = %.2f s  |  %s", cfg.samples(), cfg.chirps, frame.time_s, paused ? "PAUSED" : "LIVE");
+            DrawText(status, 25, 56, 16, ui::muted);
             std::vector<double> raw_i, raw_q, spectrum;
             double raw_max = 1;
             for (auto v : frame.beat[0]) { raw_i.push_back(v.real()); raw_q.push_back(v.imag()); raw_max = std::max({raw_max, std::abs(v.real()), std::abs(v.imag())}); }

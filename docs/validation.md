@@ -19,6 +19,10 @@ Validated on 2026-10-06 in the supplied Linux workspace.
 - GUI source and CMake configuration are provided. They remain unverified by
   a real desktop build: this environment lacks CMake, raylib and several X11/GL
   development headers; terminal access to GitHub fails DNS resolution.
+- A subsequent source review corrected the UI scheduler so that accumulated
+  work cannot advance the radar while paused, capped backlog after slow draws,
+  and moved the displayed timestamp after processing to match the visible frame.
+  These UI changes still require the desktop acceptance checks below.
 
 Remaining acceptance checks when dependencies are available:
 
