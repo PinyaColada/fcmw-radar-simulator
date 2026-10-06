@@ -7,7 +7,9 @@ namespace ui {
 Rectangle chart(Rectangle outer, const std::string& title, const std::string& subtitle) {
     DrawRectangleRounded(outer, 0.04f, 6, panel);
     DrawText(title.c_str(), static_cast<int>(outer.x + 18), static_cast<int>(outer.y + 14), 20, ink);
-    DrawText(subtitle.c_str(), static_cast<int>(outer.x + 18), static_cast<int>(outer.y + 39), 14, muted);
+    int subtitle_size = 14;
+    while (subtitle_size > 10 && MeasureText(subtitle.c_str(), subtitle_size) > outer.width - 36) --subtitle_size;
+    DrawText(subtitle.c_str(), static_cast<int>(outer.x + 18), static_cast<int>(outer.y + 39), subtitle_size, muted);
     Rectangle area{outer.x + 58, outer.y + 72, outer.width - 80, outer.height - 108};
     for (int i = 0; i <= 4; ++i) {
         const float x = area.x + area.width * i / 4;

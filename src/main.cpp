@@ -120,7 +120,19 @@ int main(int argc, char** argv) {
             EndDrawing();
             if (options.frames > 0 && processed >= options.frames) break;
         }
-        if (!options.screenshot.empty()) TakeScreenshot(options.screenshot.c_str());
+        if (!options.screenshot.empty()) {
+            // TakeScreenshot strips directory components in raylib 5.5.
+            // Export directly so --screenshot honours the requested path.
+            Image screenshot = LoadImageFromScreen();
+            if (!screenshot.data) throw std::runtime_error("could not read screenshot pixels");
+            const bool saved = ExportImage(screenshot, options.screenshot.c_str());
+            UnloadImage(screenshot);
+            if (!saved) throw std::runtime_error("could not save screenshot: " + options.screenshot);
+        }
         CloseWindow();
-    } catch (const std::exception& e) { std::cerr << "radar_demo: " << e.what() << '\n'; return 1; }
+    } catch (const std::exception& e) {
+        if (IsWindowReady()) CloseWindow();
+        std::cerr << "radar_demo: " << e.what() << '\n';
+        return 1;
+    }
 }

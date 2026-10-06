@@ -35,13 +35,12 @@ If CMake itself is missing, `./scripts/build-core.sh` compiles the same core,
 headless executable and tests using `g++` (or `$CXX`). Then run
 `./build-local/radar_headless`. This fallback does not build the desktop UI.
 
-**Validation in the delivery environment:** the actual C++ processing chain,
-headless SVG export and tests have been compiled and run with `g++`. A 200-frame
-run produced three confirmed tracks and took approximately 4.4 ms per frame on
-this machine. CMake and the desktop application have **not** been run here:
-CMake/raylib and some graphics development headers are absent, and terminal
-network access cannot resolve GitHub. This is a remaining verification step,
-not a successful GUI test. See [docs/validation.md](docs/validation.md).
+**Validation in the delivery environment:** both the desktop and core-only
+CMake builds pass their two CTest tests. The desktop demo runs on Linux with
+raylib 5.5, GLFW/X11 and Mesa OpenGL, displaying all four panels at 60 FPS on
+this machine. Live controls, pause/reset, resizing and alternate chirp parameters
+have been exercised. A 200-frame core run produced three confirmed tracks at
+approximately 4.4 ms per processed frame. See [docs/validation.md](docs/validation.md).
 
 ## Demo controls
 
@@ -214,14 +213,15 @@ one-to-one association through a crossing, alternate radar parameters, invalid
 inputs, and a 200-frame three-target simulation. Assertions remain active in
 Release builds; test failures return nonzero.
 
-**Desktop screenshot placeholder:** replace this paragraph with a screenshot
-captured using `./build/radar_demo --frames 60 --screenshot screenshot.png`
-after the desktop build is verified.
+The original screenshot placeholder is now filled by a capture of the running
+raylib desktop application. Regenerate it with
+`./build/radar_demo --frames 60 --screenshot docs/screenshot.png`.
+The output directory must already exist; an export failure returns nonzero.
 
-The image below is an actual **headless processing snapshot**, not a claim
-that the desktop UI has been executed:
+![Desktop radar demo with three targets and all four panels](docs/screenshot.png)
 
-![Actual headless simulation, three targets at 9.95 seconds](docs/headless-preview.png)
+For comparison, the independent SVG exporter produces this
+[headless processing snapshot](docs/headless-preview.png).
 
 The Git history follows the requested stages: simulation/range/first plot,
 Doppler, CFAR, and Kalman/live controls, followed by configuration and validation.

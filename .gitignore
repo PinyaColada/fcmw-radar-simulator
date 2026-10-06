@@ -1,3 +1,4 @@
 build*/
 *.ppm
 radar-frame.svg
+/screenshot.png
